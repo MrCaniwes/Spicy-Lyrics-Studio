@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Spicy Lyrics Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Visual Studio Style Start Window / Project Launcher -->
+  <div id="vsWelcomeOverlay" class="vs-welcome-overlay">
+    <div class="vs-welcome-window">
+      <!-- Window Title Bar -->
+      <div class="vs-window-header">
+        <div class="vs-window-title">
+          <span>🎧</span>
+          <span>Spicy Lyrics Studio 2026</span>
+        </div>
+        <div class="vs-window-controls">
+          <div class="vs-control-dot" title="Minimize"></div>
+          <div class="vs-control-dot" title="Maximize"></div>
+          <div class="vs-control-dot close" id="btnVsClose" title="Close"></div>
+        </div>
+      </div>
+
+      <!-- Window Body -->
+      <div class="vs-window-body">
+        <!-- Left: Recent Projects -->
+        <div class="vs-col-recent">
+          <div class="vs-section-title">Get Started</div>
+          <input type="text" id="vsSearchInput" class="vs-search-box" placeholder="Search recent projects (Alt+S)">
+
+          <div style="font-size:11px; font-weight:600; color:var(--text-dim); text-transform:uppercase;">Recent Work</div>
+          
+          <div class="vs-recent-list" id="vsRecentList">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+
+        <!-- Right: Action Cards (Visual Studio Style) -->
+        <div class="vs-col-actions">
+          <div class="vs-action-card" id="vsCardNewProject">
+            <div class="vs-action-icon">✨</div>
+            <div class="vs-action-text">
+              <div class="vs-action-title">Create a New Project</div>
+              <div class="vs-action-desc">Paste lyrics and start syncing from scratch</div>
+            </div>
+          </div>
+
+          <div class="vs-action-card" id="vsCardOpenProject">
+            <div class="vs-action-icon">📂</div>
+            <div class="vs-action-text">
+              <div class="vs-action-title">Open a Project (.json)</div>
+              <div class="vs-action-desc">Load a saved Spicy Lyrics project file</div>
+            </div>
+          </div>
+
+          <div class="vs-action-card" id="vsCardImportTTML">
+            <div class="vs-action-icon">📥</div>
+            <div class="vs-action-text">
+              <div class="vs-action-title">Import TTML / LRC</div>
+              <div class="vs-action-desc">Edit an existing timestamped lyrics file</div>
+            </div>
+          </div>
+
+          <div class="vs-action-card" id="vsCardContinueLast">
+            <div class="vs-action-icon">⚡</div>
+            <div class="vs-action-text">
+              <div class="vs-action-title">Continue Where You Left Off</div>
+              <div class="vs-action-desc">Reopen your most recent autosaved session</div>
+            </div>
+          </div>
+
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-top:8px;">
+            <label style="display:inline-flex; align-items:center; gap:6px; font-size:11.5px; color:var(--text-muted); cursor:pointer;">
+              <input type="checkbox" id="chkAlwaysShowVs" style="accent-color:var(--accent); cursor:pointer;">
+              <span>Always show this window on launch</span>
+            </label>
+            <div class="vs-skip-link" id="vsSkipLink" style="margin-top:0;">Continue to Studio →</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top Bar / Navbar -->
+  <header>
+    <div class="brand">
+      <div class="brand-logo">S</div>
+      <span class="brand-title">Spicy Studio</span>
+      <span class="brand-badge">PRO</span>
+    </div>
+
+    <div class="header-actions">
+      <!-- Spotify Status Indicator -->
+      <div id="spotifyStatusBadge" class="spotify-pill" title="Windows GSMTC Bridge Status">
+        <div class="spotify-pill-dot"></div>
+        <span id="spotifyStatusText">Waiting for Spotify</span>
+      </div>
+
+      <button id="btnPlay" class="btn-spotify-control">
+        <span>▶</span> Play
+      </button>
+
+      <label class="btn-file" title="Import .ttml / .lrc">
+        <span>📥</span> Import
+        <input type="file" id="ttmlFileInput" accept=".ttml,.xml,.lrc,.txt">
+      </label>
+
+      <div class="time-chip" id="timeDisplay">00:00.000</div>
+
+      <button id="btnExport" class="btn-download-ttml" title="Export synced TTML for Spicetify Spicy Lyrics">
+        <span>💾</span> Export TTML
+      </button>
+
+      <!-- Project Tools -->
+      <button id="btnSwitchProject" class="tool-btn" style="background:rgba(255,255,255,0.06); border-color:rgba(255,255,255,0.12); color:#f1f5f9; font-weight:600;" title="Open launcher window to switch projects">
+        <span>🔄</span> Switch Project
+      </button>
+
+      <button id="btnSaveProject" class="tool-btn" style="background:rgba(99,102,241,0.15); border-color:rgba(99,102,241,0.35); color:#c7d2fe; font-weight:600;" title="Save project as (.json) file">
+        <span>📁</span> Save Project
+      </button>
+
+      <label class="btn-file" title="Open previously saved project (.json)">
+        <span>📂</span> Open Project
+        <input type="file" id="projectFileInput" accept=".json">
+      </label>
+    </div>
+  </header>
+
+  <!-- Main Layout -->
+  <div class="main-container">
+    <!-- Left Sidebar: Lyrics Input -->
+    <aside class="sidebar">
+      <div class="sidebar-title-row">
+        <span class="sidebar-heading">Lyrics Editor</span>
+        <button id="btnFetchLyrics" class="tool-btn" style="background:rgba(99,102,241,0.12); border-color:rgba(99,102,241,0.3); color:#a5b4fc; padding:2px 8px; font-size:10.5px; font-weight:600;" title="Fetch lyrics automatically from Spotify current track">
+          <span>⚡</span> Auto Fetch
+        </button>
+      </div>
+
+      <textarea id="rawLyrics" class="lyrics-input" placeholder="Paste lyrics here line by line or click Auto Fetch..."></textarea>
+      
+      <div class="segment-switch">
+        <button id="modeWords" class="active">Word Mode</button>
+        <button id="modeLines">Line Mode</button>
+      </div>
+
+      <label style="display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--text-muted); cursor:pointer; padding:2px 4px;">
+        <input type="checkbox" id="chkAutoTurkishSyllables" style="accent-color:var(--accent); cursor:pointer;">
+        <span>Auto Turkish Syllables</span>
+      </label>
+
+      <button id="btnGenerateBlocks" class="btn-create-timeline">
+        🚀 Align from Playhead
+      </button>
+    </aside>
+
+    <!-- Right Workspace: Timeline & Stage -->
+    <main class="workspace">
+      <!-- Live Lyrics Karaoke Stage -->
+      <div class="lyric-stage">
+        <div class="stage-line" id="previewLine">
+          <span style="color:var(--text-dim); font-size:14px; font-weight:400;">Lyrics will light up here when playback begins...</span>
+        </div>
+      </div>
+
+      <!-- Action Toolbar -->
+      <div class="timeline-bar">
+        <div class="bar-actions">
+          <button id="btnSnapToPlayhead" class="tool-btn tool-btn-snap" title="Snap selected block to playhead position (Hotkey: S)">
+            🧲 Snap (S)
+          </button>
+          <button id="btnSplitWordSyllable" class="tool-btn tool-btn-split" title="Split word into syllables (Hotkey: X)">
+            ✂️ Syllables (X)
+          </button>
+          <button id="btnTapSync" class="tool-btn" style="background:rgba(244,63,94,0.12); border-color:rgba(244,63,94,0.3); color:#fca5a5; font-weight:600;" title="Tap to lock next block to playhead in real-time (Hotkey: T)">
+            🎯 Tap (T)
+          </button>
+          <button id="btnShiftBack" class="tool-btn" title="Nudge all blocks -250ms left">⏪ -250ms</button>
+          <button id="btnShiftForward" class="tool-btn" title="Nudge all blocks +250ms right">⏩ +250ms</button>
+          <button id="btnSplit" class="tool-btn" title="Split sentence into separate word blocks">Split Line</button>
+          <button id="btnMerge" class="tool-btn" title="Merge selected words into a single line">Merge</button>
+          <button id="btnSelectAll" class="tool-btn" title="Ctrl + A">Select All</button>
+          <button id="btnDeleteSelected" class="tool-btn" style="color:var(--color-rose);" title="Delete selected blocks (Del)">Delete</button>
+          <button id="btnClearAll" class="tool-btn" style="color:var(--text-dim);" title="Reset workspace">🗑️ Reset</button>
+          <span id="selectedCountBadge" class="badge-selection">0 selected</span>
+          <span id="saveStatusIndicator" style="font-size:10.5px; color:var(--text-dim); margin-left:4px;">☁️ Saved</span>
+        </div>
+
+        <div class="zoom-ctrl">
+          <span>Zoom</span>
+          <input type="range" id="zoomRange" class="zoom-slider" min="20" max="300" value="95">
+        </div>
+      </div>
+
+      <!-- Timeline Canvas -->
+      <div class="timeline-viewport" id="timelineScroll">
+        <div class="timeline-canvas" id="timelineWrapper">
+          <div class="ruler-bar" id="ruler"></div>
+          <div class="needle-line" id="playhead" style="left: 0px;"></div>
+          <div class="marquee-overlay" id="marqueeBox"></div>
+          <div class="lane-tracks" id="tracksContainer"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Bottom Hint Bar -->
+  <footer>
+    <div class="footer-hints">
+      <span class="footer-hint-item"><kbd>Space</kbd> Play/Pause</span>
+      <span class="footer-hint-item"><kbd>T</kbd> Live Tap-Sync</span>
+      <span class="footer-hint-item"><kbd>S</kbd> Snap to Playhead</span>
+      <span class="footer-hint-item"><kbd>X</kbd> Split Syllables</span>
+      <span class="footer-hint-item"><kbd>←/→</kbd> Nudge (10ms/50ms)</span>
+      <span class="footer-hint-item"><kbd>Del</kbd> Delete</span>
+    </div>
+    <span>Spicetify Spicy Lyrics Fully Compatible</span>
+  </footer>
+
+  <!-- Custom Dark Studio Modal Dialog -->
+  <div id="customModalOverlay" class="custom-modal-overlay hidden">
+    <div class="custom-modal-box">
+      <div class="custom-modal-header">
+        <div id="modalIcon" class="custom-modal-icon info">ℹ️</div>
+        <div id="modalTitle" class="custom-modal-title">Notice</div>
+      </div>
+      <div id="modalMessage" class="custom-modal-message"></div>
+      <input type="text" id="modalInput" class="custom-modal-input" style="display:none;" autocomplete="off">
+      <div class="custom-modal-actions">
+        <button id="btnModalCancel" class="btn-modal-cancel" style="display:none;">Cancel</button>
+        <button id="btnModalConfirm" class="btn-modal-confirm">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
