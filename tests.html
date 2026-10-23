@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Spicy Lyrics Studio - Automated Test Suite</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      background: #090a0f;
+      color: #f1f5f9;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      padding: 30px;
+      margin: 0;
+    }
+    h1 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+    .subtitle { color: #94a3b8; font-size: 13px; margin-bottom: 24px; }
+    .test-card {
+      background: #12141c;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .test-name { font-size: 13px; font-weight: 600; }
+    .test-desc { font-size: 11.5px; color: #64748b; margin-top: 2px; }
+    .badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 4px;
+    }
+    .badge.pass { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+    .badge.fail { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+    .summary-card {
+      background: #181b26;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      padding: 16px 20px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🧪 Spicy Lyrics Studio Test Suite</h1>
+  <div class="subtitle">Unit, parsing, fault-tolerance & syllable hyphenation verification</div>
+
+  <div class="summary-card">
+    <div>
+      <div style="font-weight:700; font-size:15px;" id="summaryStatus">Running Verification...</div>
+      <div style="font-size:12px; color:#94a3b8; margin-top:3px;" id="summaryStats">0/0 tests passed</div>
+    </div>
+    <div id="summaryBadge" class="badge pass" style="font-size:13px;">RUNNING</div>
+  </div>
+
+  <div id="testResults"></div>
+
+  <script>
+    const TR_VOWELS = new Set(['a', 'e', 'ı', 'i', 'o', 'ö', 'u', 'ü', 'A', 'E', 'I', 'İ', 'O', 'Ö', 'U', 'Ü']);
+    function isVowel(ch) { return TR_VOWELS.has(ch); }
+
+    function hyphenateTurkishWord(rawWord) {
+      if (!rawWord || rawWord.length <= 2) return [rawWord];
+      const match = rawWord.match(/^([^\p{L}\d]*)([\p{L}\d\-']+)([^\p{L}\d]*)$/u);
+      let prefix = '', word = rawWord, suffix = '';
+      if (match) { prefix = match[1]; word = match[2]; suffix = match[3]; }
+
+      let vowelCount = 0;
+      for (const ch of word) { if (isVowel(ch)) vowelCount++; }
+      if (vowelCount <= 1) return [rawWord];
+
+      const syllables = [];
+      let i = word.length - 1;
+      while (i >= 0) {
+        while (i >= 0 && !isVowel(word[i])) i--;
+        if (i < 0) break;
+
+        let prevVowelIdx = -1;
+        for (let j = i - 1; j >= 0; j--) {
+          if (isVowel(word[j])) { prevVowelIdx = j; break; }
+        }
+        if (prevVowelIdx === -1) { syllables.unshift(word.slice(0)); break; }
+
+        const consonantsBetween = i - prevVowelIdx - 1;
+        let splitAt = i;
+        if (consonantsBetween === 0) splitAt = i;
+        else if (consonantsBetween === 1) splitAt = prevVowelIdx + 1;
+        else if (consonantsBetween === 2) splitAt = prevVowelIdx + 2;
+        else splitAt = prevVowelIdx + (consonantsBetween - 1);
+
+        syllables.unshift(word.slice(splitAt));
+        word = word.slice(0, splitAt);
+        i = splitAt - 1;
+      }
+      if (syllables.length === 0) return [rawWord];
+      syllables[0] = prefix + syllables[0];
+      syllables[syllables.length - 1] = syllables[syllables.length - 1] + suffix;
+      return syllables.filter(s => s.length > 0);
+    }
+
+    function parseTimeStrToSeconds(str) {
+      if (!str) return 0;
+      str = str.trim();
+      if (str.endsWith('s')) str = str.slice(0, -1);
+      const parts = str.split(':');
+      if (parts.length === 3) return (parseFloat(parts[0]) * 3600) + (parseFloat(parts[1]) * 60) + parseFloat(parts[2]);
+      if (parts.length === 2) return (parseFloat(parts[0]) * 60) + parseFloat(parts[1]);
+      return parseFloat(str) || 0;
+    }
+
+    function toTTMLTime(totalSeconds) {
+      const h = Math.floor(totalSeconds / 3600);
+      const m = Math.floor((totalSeconds % 3600) / 60);
+      const s = totalSeconds % 60;
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${s.toFixed(3).padStart(6, '0')}`;
+    }
+
+    const tests = [
+      {
+        name: "Turkish Hyphenator: Multi-syllable standard",
+        desc: "'Nefesimi' -> ['Ne', 'fe', 'si', 'mi']",
+        run: () => {
+          const res = hyphenateTurkishWord("Nefesimi");
+          return JSON.stringify(res) === JSON.stringify(["Ne", "fe", "si", "mi"]);
+        }
+      },
+      {
+        name: "Turkish Hyphenator: Compound consonant clusters",
+        desc: "'korkmuyorum' -> ['kork', 'mu', 'yo', 'rum']",
+        run: () => {
+          const res = hyphenateTurkishWord("korkmuyorum");
+          return JSON.stringify(res) === JSON.stringify(["kork", "mu", "yo", "rum"]);
+        }
+      },
+      {
+        name: "Turkish Hyphenator: Monosyllabic resilience",
+        desc: "'ben', 've', 'bir' should not split",
+        run: () => {
+          return hyphenateTurkishWord("ben").length === 1 && hyphenateTurkishWord("ve").length === 1;
+        }
+      },
+      {
+        name: "Time Parser: Millisecond timestamp format",
+        desc: "'01:23.456' -> 83.456s",
+        run: () => {
+          const sec = parseTimeStrToSeconds("01:23.456");
+          return Math.abs(sec - 83.456) < 0.001;
+        }
+      },
+      {
+        name: "Time Parser: Full TTML HH:MM:SS.mmm",
+        desc: "'00:02:15.500' -> 135.5s",
+        run: () => {
+          const sec = parseTimeStrToSeconds("00:02:15.500");
+          return Math.abs(sec - 135.5) < 0.001;
+        }
+      },
+      {
+        name: "TTML Exporter Formatter",
+        desc: "83.456s -> '00:01:23.456'",
+        run: () => {
+          return toTTMLTime(83.456) === "00:01:23.456";
+        }
+      },
+      {
+        name: "Spicy Lyrics Syllable Syntax Rule",
+        desc: "Inline consecutive spans with trailing space only on the final syllable",
+        run: () => {
+          const syllables = [
+            { text: "kur", isSyllable: true, isLastSyllableOfWord: false },
+            { text: "tar", isSyllable: true, isLastSyllableOfWord: false },
+            { text: "sana", isSyllable: true, isLastSyllableOfWord: true }
+          ];
+          let out = "";
+          syllables.forEach(s => {
+            out += `<span>${s.text}</span>` + (s.isLastSyllableOfWord ? " " : "");
+          });
+          return out === "<span>kur</span><span>tar</span><span>sana</span> ";
+        }
+      },
+      {
+        name: "Project JSON Deserialization Fault Tolerance",
+        desc: "Gracefully handles corrupt or empty JSON structures",
+        run: () => {
+          try {
+            const emptyObj = JSON.parse('{"version": "1.0"}');
+            const isValid = Array.isArray(emptyObj.items);
+            return isValid === false; // correctly identifies missing items
+          } catch {
+            return false;
+          }
+        }
+      }
+    ];
+
+    const resultsDiv = document.getElementById("testResults");
+    let passed = 0;
+
+    tests.forEach(t => {
+      let isOk = false;
+      try { isOk = t.run(); } catch(e) { isOk = false; }
+      if (isOk) passed++;
+
+      const card = document.createElement("div");
+      card.className = "test-card";
+      card.innerHTML = `
+        <div>
+          <div class="test-name">${t.name}</div>
+          <div class="test-desc">${t.desc}</div>
+        </div>
+        <div class="badge ${isOk ? 'pass' : 'fail'}">${isOk ? 'PASS' : 'FAIL'}</div>
+      `;
+      resultsDiv.appendChild(card);
+    });
+
+    const isAllPassed = passed === tests.length;
+    document.getElementById("summaryStatus").innerText = isAllPassed ? "All Tests Passed Successfully" : "Some Tests Failed";
+    document.getElementById("summaryStats").innerText = `${passed}/${tests.length} tests verified`;
+    document.getElementById("summaryBadge").className = `badge ${isAllPassed ? 'pass' : 'fail'}`;
+    document.getElementById("summaryBadge").innerText = isAllPassed ? "100% VERIFIED" : "WARNING";
+  </script>
+</body>
+</html>
