@@ -551,6 +551,28 @@
       border-color: rgba(6, 182, 212, 0.6);
     }
 
+    /* Arka Vokal / Geri Vokal Bloğu (Amber / Turuncu Çizgili) */
+    .block-clip.is-bg-vocal {
+      background: rgba(45, 30, 10, 0.9) !important;
+      border-color: rgba(245, 158, 11, 0.6) !important;
+      color: #fef3c7 !important;
+      border-style: dashed !important;
+    }
+    .block-clip.is-bg-vocal::after {
+      content: "BG";
+      position: absolute;
+      right: 9px;
+      top: 2px;
+      font-size: 8px;
+      font-weight: 700;
+      color: #f59e0b;
+      opacity: 0.85;
+      pointer-events: none;
+    }
+    .block-clip.is-bg-vocal:hover {
+      border-color: rgba(245, 158, 11, 0.9) !important;
+    }
+
     /* Seçili Blok */
     .block-clip.selected {
       border: 1.5px solid var(--color-rose) !important;

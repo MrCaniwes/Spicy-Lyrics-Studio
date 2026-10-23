@@ -141,6 +141,7 @@
     const btnShiftForward = document.getElementById('btnShiftForward');
     const btnSnapToPlayhead = document.getElementById('btnSnapToPlayhead');
     const btnSplitWordSyllable = document.getElementById('btnSplitWordSyllable');
+    const btnToggleBgVocal = document.getElementById('btnToggleBgVocal');
     const btnTapSync = document.getElementById('btnTapSync');
     const chkAutoTurkishSyllables = document.getElementById('chkAutoTurkishSyllables');
     const btnClearAll = document.getElementById('btnClearAll');
@@ -541,6 +542,10 @@ Ben yazar, ben yaşarım`;
         e.preventDefault();
         toggleSpotifyPlay();
       }
+      if (e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        toggleSelectedBgVocal();
+      }
       if (e.key.toLowerCase() === 't') {
         e.preventDefault();
         triggerTapSync();
@@ -573,6 +578,32 @@ Ben yazar, ben yaşarım`;
       const s = Math.floor(sec % 60);
       const ms = Math.floor((sec % 1) * 1000);
       return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
+    }
+
+    // ==========================================
+    // 🎙️ TOGGLE BACKGROUND VOCAL (OPPOSING / RIGHT ALIGN)
+    // ==========================================
+    function toggleSelectedBgVocal() {
+      if (selectedItemIds.size === 0) {
+        customAlert("Please select at least one block to toggle as Background Vocal!", "Selection Required");
+        return;
+      }
+
+      const selectedList = items.filter(it => selectedItemIds.has(it.id));
+      const hasAnyNonBg = selectedList.some(it => !it.isBgVocal);
+      // If any is not BG, make all BG. If all are already BG, toggle off.
+      const targetState = hasAnyNonBg;
+
+      selectedList.forEach(it => {
+        it.isBgVocal = targetState;
+      });
+
+      renderAllBlocks();
+      autoSaveState();
+    }
+
+    if (btnToggleBgVocal) {
+      btnToggleBgVocal.addEventListener('click', toggleSelectedBgVocal);
     }
 
     // ==========================================
@@ -945,6 +976,7 @@ Ben yazar, ben yaşarım`;
         const el = document.createElement('div');
         el.className = 'block-clip' + 
           (b.isSyllable ? ' type-syllable' : (b.isWord ? ' type-word' : '')) + 
+          (b.isBgVocal ? ' is-bg-vocal' : '') +
           (selectedItemIds.has(b.id) ? ' selected' : '');
         el.id = b.id;
 
@@ -1386,7 +1418,9 @@ Ben yazar, ben yaşarım`;
       groups.forEach(grp => {
         const pStart = toTTMLTime(grp[0].start);
         const pEnd = toTTMLTime(grp[grp.length - 1].end);
-        ttml += `      <p begin="${pStart}" end="${pEnd}">\n        `;
+        const isGroupBg = grp.some(b => b.isBgVocal);
+        const bgAttrs = isGroupBg ? ' ttm:role="x-bg" tts:textAlign="right"' : '';
+        ttml += `      <p begin="${pStart}" end="${pEnd}"${bgAttrs}>\n        `;
 
         grp.forEach(b => {
           if (b.isSyllable) {
