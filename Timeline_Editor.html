@@ -143,7 +143,21 @@
         </button>
       </div>
 
-      <textarea id="rawLyrics" class="lyrics-input" placeholder="Paste lyrics here line by line or click Auto Fetch..."></textarea>
+      <div class="sidebar-tab-row">
+        <button id="tabLyricsText" class="sidebar-tab active">📝 Text</button>
+        <button id="tabLyricsPalette" class="sidebar-tab">✨ Word Chips (Drag)</button>
+      </div>
+
+      <div id="panelLyricsText" class="sidebar-panel-view active">
+        <textarea id="rawLyrics" class="lyrics-input" placeholder="Paste lyrics here line by line or click Auto Fetch..."></textarea>
+      </div>
+
+      <div id="panelLyricsPalette" class="sidebar-panel-view">
+        <div class="palette-helper-text">💡 Drag any word directly onto timeline tracks! Click to insert at playhead.</div>
+        <div id="paletteWordsContainer" class="palette-chips-container">
+          <span style="color:var(--text-dim); font-size:11.5px;">No lyrics yet. Paste lyrics in the Text tab.</span>
+        </div>
+      </div>
       
       <div class="segment-switch">
         <button id="modeWords" class="active">Word Mode</button>
@@ -172,6 +186,8 @@
       <!-- Action Toolbar -->
       <div class="timeline-bar">
         <div class="bar-actions">
+          <button id="btnUndo" class="tool-btn" title="Undo last action (Ctrl + Z)">↩️ Undo</button>
+          <button id="btnRedo" class="tool-btn" title="Redo action (Ctrl + Y or Ctrl + Shift + Z)">↪️ Redo</button>
           <button id="btnSnapToPlayhead" class="tool-btn tool-btn-snap" title="Snap selected block to playhead position (Hotkey: S)">
             🧲 Snap (S)
           </button>

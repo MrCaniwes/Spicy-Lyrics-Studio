@@ -149,6 +149,79 @@
 
     const STORAGE_KEY = 'spicy_studio_autosave_v1';
 
+    // ==========================================
+    // ↩️ UNDO / REDO HISTORY SYSTEM
+    // ==========================================
+    const undoStack = [];
+    const redoStack = [];
+    const MAX_HISTORY_STEPS = 50;
+    let isApplyingHistory = false;
+
+    function pushHistoryState() {
+      if (isApplyingHistory) return;
+      try {
+        const snapshot = JSON.stringify(items);
+        // Avoid duplicate consecutive entries
+        if (undoStack.length > 0 && undoStack[undoStack.length - 1] === snapshot) return;
+        undoStack.push(snapshot);
+        if (undoStack.length > MAX_HISTORY_STEPS) undoStack.shift();
+        redoStack.length = 0; // Clear redo on new action
+        updateUndoRedoButtons();
+      } catch (e) {
+        console.error("Push history error:", e);
+      }
+    }
+
+    function undoAction() {
+      if (undoStack.length === 0) return;
+      isApplyingHistory = true;
+      try {
+        // Current state goes to redo
+        redoStack.push(JSON.stringify(items));
+        const prevJson = undoStack.pop();
+        items = JSON.parse(prevJson);
+        selectedItemIds.clear();
+        renderAllBlocks();
+        updateSelectedBadge();
+        autoSaveState();
+        updatePaletteUsage();
+      } finally {
+        isApplyingHistory = false;
+        updateUndoRedoButtons();
+      }
+    }
+
+    function redoAction() {
+      if (redoStack.length === 0) return;
+      isApplyingHistory = true;
+      try {
+        undoStack.push(JSON.stringify(items));
+        const nextJson = redoStack.pop();
+        items = JSON.parse(nextJson);
+        selectedItemIds.clear();
+        renderAllBlocks();
+        updateSelectedBadge();
+        autoSaveState();
+        updatePaletteUsage();
+      } finally {
+        isApplyingHistory = false;
+        updateUndoRedoButtons();
+      }
+    }
+
+    function updateUndoRedoButtons() {
+      const btnUndo = document.getElementById('btnUndo');
+      const btnRedo = document.getElementById('btnRedo');
+      if (btnUndo) {
+        btnUndo.disabled = undoStack.length === 0;
+        btnUndo.style.opacity = undoStack.length === 0 ? '0.5' : '1';
+      }
+      if (btnRedo) {
+        btnRedo.disabled = redoStack.length === 0;
+        btnRedo.style.opacity = redoStack.length === 0 ? '0.5' : '1';
+      }
+    }
+
     // Otomatik Kayıt Fonksiyonu
     let saveTimeout = null;
     function autoSaveState() {
@@ -376,6 +449,8 @@ Ben yazar, ben yaşarım`;
     // Çizgiye Çekme Fonksiyonu (Snapping)
     // ==========================================
     function snapSelectedToPlayhead() {
+      if (selectedItemIds.size === 0) return;
+      pushHistoryState();
       if (selectedItemIds.size === 0) {
         customAlert("Please select a block to snap to playhead first!", "Selection Required");
         return;
@@ -409,6 +484,7 @@ Ben yazar, ben yaşarım`;
       const targetId = Array.from(selectedItemIds)[0];
       const targetItem = items.find(it => it.id === targetId);
       if (!targetItem) return;
+      pushHistoryState();
 
       const currentText = targetItem.text.trim();
       const trParts = hyphenateTurkishWord(currentText);
@@ -465,6 +541,7 @@ Ben yazar, ben yaşarım`;
     // ==========================================
     function triggerTapSync() {
       if (items.length === 0) return;
+      pushHistoryState();
 
       const sorted = [...items].sort((a,b) => a.start - b.start);
       // Henüz playhead'in (kırmızı çizginin) önünde olan veya seçili olan ilk bloğu bul
@@ -567,6 +644,18 @@ Ben yazar, ben yaşarım`;
       if (e.key === 'Delete' || e.key === 'Backspace') {
         deleteSelectedItems();
       }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          redoAction();
+        } else {
+          undoAction();
+        }
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        redoAction();
+      }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
         e.preventDefault();
         selectAllItems();
@@ -594,6 +683,7 @@ Ben yazar, ben yaşarım`;
       // If any is not BG, make all BG. If all are already BG, toggle off.
       const targetState = hasAnyNonBg;
 
+      pushHistoryState();
       selectedList.forEach(it => {
         it.isBgVocal = targetState;
       });
@@ -683,6 +773,7 @@ Ben yazar, ben yaşarım`;
     btnGenerateBlocks.addEventListener('click', () => {
       const lines = rawLyrics.value.split('\n').map(l => l.trim()).filter(l => l.length > 0);
       if (lines.length === 0) return;
+      pushHistoryState();
 
       items = [];
       selectedItemIds.clear();
@@ -802,6 +893,10 @@ Ben yazar, ben yaşarım`;
             pElements.forEach((p, pIdx) => {
               const lineBegin = parseTimeStrToSeconds(p.getAttribute("begin"));
               const lineEnd = parseTimeStrToSeconds(p.getAttribute("end"));
+              const roleAttr = p.getAttribute("ttm:role") || p.getAttribute("role") || "";
+              const alignAttr = p.getAttribute("tts:textAlign") || p.getAttribute("textAlign") || "";
+              const agentAttr = p.getAttribute("ttm:agent") || p.getAttribute("agent") || "";
+              const isBgLine = roleAttr.includes("x-bg") || alignAttr.toLowerCase() === "right" || agentAttr.toLowerCase() === "v2";
               const spans = p.querySelectorAll("span");
 
               if (spans.length > 0) {
@@ -823,7 +918,8 @@ Ben yazar, ben yaşarım`;
                     lineIndex: pIdx,
                     trackIndex: pIdx % 4,
                     isWord: true,
-                    isSyllable: false
+                    isSyllable: false,
+                    isBgVocal: isBgLine
                   });
                   currentWordStart = sEnd;
                 });
@@ -837,7 +933,8 @@ Ben yazar, ben yaşarım`;
                     end: lineEnd > lineBegin ? lineEnd : (lineBegin + 4.0),
                     lineIndex: pIdx,
                     trackIndex: pIdx % 3,
-                    isWord: false
+                    isWord: false,
+                    isBgVocal: isBgLine
                   });
                 }
               }
@@ -1044,6 +1141,7 @@ Ben yazar, ben yaşarım`;
 
         updateSelectedBadge();
 
+        pushHistoryState();
         isDraggingSelection = true;
         dragStartX = e.clientX;
         initialItemPositions.clear();
@@ -1185,6 +1283,7 @@ Ben yazar, ben yaşarım`;
 
       if (wasManipulating) {
         autoSaveState();
+        updatePaletteUsage();
       }
     });
 
@@ -1209,12 +1308,18 @@ Ben yazar, ben yaşarım`;
 
     function deleteSelectedItems() {
       if (selectedItemIds.size === 0) return;
+      pushHistoryState();
       items = items.filter(it => !selectedItemIds.has(it.id));
       selectedItemIds.clear();
       renderAllBlocks();
       updateSelectedBadge();
       autoSaveState();
     }
+
+    const btnUndo = document.getElementById('btnUndo');
+    const btnRedo = document.getElementById('btnRedo');
+    if (btnUndo) btnUndo.addEventListener('click', undoAction);
+    if (btnRedo) btnRedo.addEventListener('click', redoAction);
 
     btnSelectAll.addEventListener('click', selectAllItems);
     btnDeleteSelected.addEventListener('click', deleteSelectedItems);
@@ -1388,10 +1493,13 @@ Ben yazar, ben yaşarım`;
 
       let ttml = `<?xml version="1.0" encoding="utf-8"?>
 <tt xmlns="http://www.w3.org/ns/ttml" 
-    xmlns:ttm="http://www.w3.org/ns/ttml#metadata">
+    xmlns:ttm="http://www.w3.org/ns/ttml#metadata"
+    xmlns:tts="http://www.w3.org/ns/ttml#styling">
   <head>
     <metadata>
       <ttm:title>Spicy Lyrics Synced</ttm:title>
+      <ttm:agent type="person" xml:id="v1"/>
+      <ttm:agent type="person" xml:id="v2"/>
     </metadata>
   </head>
   <body>
@@ -1419,7 +1527,7 @@ Ben yazar, ben yaşarım`;
         const pStart = toTTMLTime(grp[0].start);
         const pEnd = toTTMLTime(grp[grp.length - 1].end);
         const isGroupBg = grp.some(b => b.isBgVocal);
-        const bgAttrs = isGroupBg ? ' ttm:role="x-bg" tts:textAlign="right"' : '';
+        const bgAttrs = isGroupBg ? ' ttm:agent="v2" ttm:role="x-bg" tts:textAlign="right"' : ' ttm:agent="v1"';
         ttml += `      <p begin="${pStart}" end="${pEnd}"${bgAttrs}>\n        `;
 
         grp.forEach(b => {
@@ -1827,3 +1935,192 @@ Ben yazar, ben yaşarım`;
       const firstStart = Math.min(...items.map(i => i.start));
       timelineScroll.scrollLeft = Math.max(0, (firstStart * pixelsPerSecond) - 80);
     }
+
+    // ==========================================
+    // ✨ WORD PALETTE & DRAG-AND-DROP TO TIMELINE
+    // ==========================================
+    const tabLyricsText = document.getElementById('tabLyricsText');
+    const tabLyricsPalette = document.getElementById('tabLyricsPalette');
+    const panelLyricsText = document.getElementById('panelLyricsText');
+    const panelLyricsPalette = document.getElementById('panelLyricsPalette');
+    const paletteWordsContainer = document.getElementById('paletteWordsContainer');
+
+    if (tabLyricsText && tabLyricsPalette) {
+      tabLyricsText.addEventListener('click', () => {
+        tabLyricsText.classList.add('active');
+        tabLyricsPalette.classList.remove('active');
+        panelLyricsText.classList.add('active');
+        panelLyricsPalette.classList.remove('active');
+      });
+
+      tabLyricsPalette.addEventListener('click', () => {
+        tabLyricsPalette.classList.add('active');
+        tabLyricsText.classList.remove('active');
+        panelLyricsPalette.classList.add('active');
+        panelLyricsText.classList.remove('active');
+        renderWordPalette();
+      });
+    }
+
+    function renderWordPalette() {
+      if (!paletteWordsContainer) return;
+      paletteWordsContainer.innerHTML = '';
+
+      const lines = rawLyrics.value.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      if (lines.length === 0) {
+        paletteWordsContainer.innerHTML = '<span style="color:var(--text-dim); font-size:11.5px; padding:12px;">No lyrics yet. Paste lyrics in the Text tab!</span>';
+        return;
+      }
+
+      const autoSyllable = chkAutoTurkishSyllables && chkAutoTurkishSyllables.checked;
+
+      lines.forEach((lineText, lIdx) => {
+        const groupEl = document.createElement('div');
+        groupEl.className = 'palette-line-group';
+
+        const label = document.createElement('div');
+        label.className = 'palette-line-label';
+        label.innerText = `Line ${lIdx + 1}: ${lineText.length > 25 ? lineText.slice(0, 25) + '...' : lineText}`;
+        groupEl.appendChild(label);
+
+        const words = lineText.split(' ').filter(w => w.length > 0);
+
+        words.forEach((w, wIdx) => {
+          if (autoSyllable) {
+            const sylParts = hyphenateTurkishWord(w);
+            if (sylParts.length > 1) {
+              sylParts.forEach((partText, pIdx) => {
+                createPaletteChip(groupEl, partText, lIdx, wIdx, pIdx, true, pIdx === sylParts.length - 1);
+              });
+              return;
+            }
+          }
+          createPaletteChip(groupEl, w, lIdx, wIdx, 0, false, false);
+        });
+
+        paletteWordsContainer.appendChild(groupEl);
+      });
+
+      updatePaletteUsage();
+    }
+
+    function createPaletteChip(parentGroup, text, lineIdx, wordIdx, sylIdx, isSyllable, isLastSyllable) {
+      const chip = document.createElement('div');
+      chip.className = 'palette-chip';
+      chip.draggable = true;
+      chip.innerText = text;
+      chip.dataset.text = text;
+      chip.dataset.lineIdx = lineIdx;
+      chip.dataset.wordIdx = wordIdx;
+      chip.dataset.isSyllable = isSyllable ? 'true' : 'false';
+      chip.dataset.isLastSyllable = isLastSyllable ? 'true' : 'false';
+
+      chip.addEventListener('dragstart', (e) => {
+        chip.classList.add('dragged');
+        e.dataTransfer.setData('text/plain', JSON.stringify({
+          text: text,
+          lineIndex: lineIdx,
+          isSyllable: isSyllable,
+          isLastSyllableOfWord: isLastSyllable
+        }));
+        e.dataTransfer.effectAllowed = 'copy';
+      });
+
+      chip.addEventListener('dragend', () => {
+        chip.classList.remove('dragged');
+      });
+
+      // Click to insert at current playhead
+      chip.addEventListener('click', () => {
+        insertPaletteWordAtTime(text, lineIdx, isSyllable, isLastSyllable, currentPositionSec);
+      });
+
+      parentGroup.appendChild(chip);
+    }
+
+    function updatePaletteUsage() {
+      if (!paletteWordsContainer) return;
+      const chips = paletteWordsContainer.querySelectorAll('.palette-chip');
+      const existingTexts = new Set(items.map(it => it.text.trim().toLowerCase()));
+
+      chips.forEach(chip => {
+        const t = (chip.dataset.text || '').trim().toLowerCase();
+        if (existingTexts.has(t)) {
+          chip.classList.add('used');
+          chip.title = 'Already present on timeline (Click or Drag to add again)';
+        } else {
+          chip.classList.remove('used');
+          chip.title = 'Click to add at playhead or drag to timeline';
+        }
+      });
+    }
+
+    function insertPaletteWordAtTime(text, lineIdx, isSyllable, isLastSyllable, targetSec, targetTrack = null) {
+      pushHistoryState();
+      const dur = Math.max(0.35, text.length * 0.12);
+      const track = targetTrack !== null ? targetTrack : (lineIdx % 4);
+
+      const newItem = {
+        id: 'item_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+        text: text,
+        start: targetSec,
+        end: targetSec + dur,
+        lineIndex: lineIdx,
+        trackIndex: track,
+        isWord: true,
+        isSyllable: isSyllable,
+        isLastSyllableOfWord: isLastSyllable
+      };
+
+      items.push(newItem);
+      selectedItemIds.clear();
+      selectedItemIds.add(newItem.id);
+
+      renderAllBlocks();
+      updateSelectedBadge();
+      autoSaveState();
+      updatePaletteUsage();
+    }
+
+    // Timeline Drop Target Events
+    if (timelineWrapper) {
+      timelineWrapper.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        tracksContainer.classList.add('drag-over');
+      });
+
+      timelineWrapper.addEventListener('dragleave', (e) => {
+        if (!timelineWrapper.contains(e.relatedTarget)) {
+          tracksContainer.classList.remove('drag-over');
+        }
+      });
+
+      timelineWrapper.addEventListener('drop', (e) => {
+        e.preventDefault();
+        tracksContainer.classList.remove('drag-over');
+
+        try {
+          const raw = e.dataTransfer.getData('text/plain');
+          if (!raw) return;
+          const data = JSON.parse(raw);
+          if (!data || !data.text) return;
+
+          const rect = timelineWrapper.getBoundingClientRect();
+          const dropX = e.clientX - rect.left;
+          const dropY = e.clientY - rect.top;
+
+          const targetTime = Math.max(0, dropX / pixelsPerSecond);
+          // Calculate track index based on Y coordinate (each track is ~46px)
+          const trackIdx = Math.max(0, Math.min(3, Math.floor((dropY - 24) / 46)));
+
+          insertPaletteWordAtTime(data.text, data.lineIndex, data.isSyllable, data.isLastSyllableOfWord, targetTime, trackIdx);
+        } catch (err) {
+          console.error("Timeline drop error:", err);
+        }
+      });
+    }
+
+    rawLyrics.addEventListener('input', () => {
+      renderWordPalette();
+    });
